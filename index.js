@@ -37,26 +37,39 @@
 // };
 
 // scrape().then((value) => {
-//     console.log(value); // Success!
+//     console.log(value); // Success!   
 // });
 
 const puppeteer = require('puppeteer');
 var csv = require("fast-csv");
+const fs = require('fs'); 
 
-// csv.fromPath("name_titles.csv")
-//     .on("data", function (data) {
-//         console.log(data);
-//     })
-//     .on("end", function () {
-//         console.log("done");
-//     });
+var stream = fs.createReadStream("name_titles.csv");
+
+csv.fromStream(stream, { headers: true })
+    .validate(function (data) {
+        // empty name or last name
+        return (data.First_Name !== '' && data.Last_Name !== ''); 
+    })
+    .on("data-invalid", function (data) {
+        //do something with invalid row
+        console.log(data)
+    })
+    .on("data", function (data) {
+        // console.log(data);
+    })
+    .on("end", function () {
+        console.log("done");
+    });
+
+return;
 
 var CREDS = [];
 CREDS['username'] = 'pablovv2016@gmail.com';
 CREDS['password'] = 'Osito123$';
 
 
-let login = async () => {
+let scrap = async () => {
     const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
 
@@ -103,6 +116,9 @@ let login = async () => {
 
     await page.goto('https://www.linkedin.com');
 
+    await page.type('#extended-nav-search input', 'Jueputa que rico');
+
+
 
     // for (var element of elements) { // Loop through each proudct
     //     let title = element.childNodes[5].innerText; // Select the title
@@ -116,7 +132,6 @@ let login = async () => {
     //browser.close();
     // return result; // Return the data
 
-    await page.type('#extended-nav-search input', 'Jueputa que rico');
 
     return page;
 };
@@ -125,5 +140,5 @@ let login = async () => {
 //     console.log(value); // Success!
 // });
 
-login();
 
+scrap();
