@@ -41,31 +41,89 @@
 // });
 
 const puppeteer = require('puppeteer');
+var csv = require("fast-csv");
 
-let scrape = async () => {
-    const browser = await puppeteer.launch({headless: false});
+// csv.fromPath("name_titles.csv")
+//     .on("data", function (data) {
+//         console.log(data);
+//     })
+//     .on("end", function () {
+//         console.log("done");
+//     });
+
+var CREDS = [];
+CREDS['username'] = 'pablovv2016@gmail.com';
+CREDS['password'] = 'Osito123$';
+
+
+let login = async () => {
+    const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
 
-    await page.goto('http://books.toscrape.com/');
+    // let expire = new Date();
+    // expire.setDate(expire.getDate() + 1);
 
-    const result = await page.evaluate(() => {
-        let data = []; // Create an empty array that will store our data
-        let elements = document.querySelectorAll('.product_pod'); // Select all Products
+    // const cookies = [
+    //     {
+    //       name: 'JSESSIONID',
+    //       value: '"ajax:1023276565147052080"',
+    //       domain: '.www.linkedin.com',
+    //       path: '/',
+    //       expires: expire.getTime(),
+    //       size: 36,
+    //       httpOnly: false,
+    //       secure: true,
+    //       session: true,
+    //     },
+    //     {
+    //       name: 'UserMatchHistory',
+    //       value: 'AQJKPuZWkZjVXgAAAWYhMjHch0cm1CzrF7SNdISAKhvWEgVQw_fftschnSm2DvQQ-6q8HOxS_AJBsQFJ2k5et1_juEBBtAuXaIb74zMsjK4xOHmhui9F8Orrmd4_qTCu8zDpK5LS-MvPhyY-ZcLoYeEV8qn9o9IRMA',
+    //       domain: '.ads.linkedin.com',
+    //       path: '/',
+    //       expires: expire,
+    //       size: 178,
+    //       httpOnly: false,
+    //       secure: true,
+    //       session: true,
+    //     },
+    //   ];
+    //   await page.setCookie(...cookies);
 
-        for (var element of elements){ // Loop through each proudct
-            let title = element.childNodes[5].innerText; // Select the title
-            let price = element.childNodes[7].children[0].innerText; // Select the price
+    await page.goto('https://www.linkedin.com/uas/login?session_redirect=%2Fvoyager%2FloginRedirect%2Ehtml&fromSignIn=true&trk=uno-reg-join-sign-in');
 
-            data.push({title, price}); // Push an object with the data onto our array
-        }
+    // await page.goto('https://www.linkedin.com/');
 
-        return data; // Return our data array
-    });
+    await page.type('#session_key-login', CREDS.username);
+    await page.type('#session_password-login', CREDS.password);
+    // click and wait for navigation
+    await Promise.all([
+        page.click('#btn-primary'),
+        page.waitForNavigation({ waitUntil: 'networkidle0' }),
+    ]);
 
-    browser.close();
-    return result; // Return the data
+    await page.goto('https://www.linkedin.com');
+
+
+    // for (var element of elements) { // Loop through each proudct
+    //     let title = element.childNodes[5].innerText; // Select the title
+    //     let price = element.childNodes[7].children[0].innerText; // Select the price
+
+    //     data.push({ title, price }); // Push an object with the data onto our array
+    // }
+
+    // return data; // Return our data array
+
+    //browser.close();
+    // return result; // Return the data
+
+    await page.type('#extended-nav-search input', 'Jueputa que rico');
+
+    return page;
 };
 
-scrape().then((value) => {
-    console.log(value); // Success!
-});
+// scrape().then((value) => {
+//     console.log(value); // Success!
+// });
+
+login();
+
