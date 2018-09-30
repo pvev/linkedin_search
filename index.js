@@ -13,98 +13,59 @@
 
 // const puppeteer = require('puppeteer');
 
-// let scrape = async () => {
-//     const browser = await puppeteer.launch({headless: false});
-//     const page = await browser.newPage();
-
-//     await page.goto('http://books.toscrape.com/');
-//     await page.click('#default > div > div > div > div > section > div:nth-child(2) > ol > li:nth-child(1) > article > div.image_container > a > img');
-//     await page.waitFor(1000);
-
-//     const result = await page.evaluate(() => {
-//         let title = document.querySelector('h1').innerText;
-//         let price = document.querySelector('.price_color').innerText;
-
-//         return {
-//             title,
-//             price
-//         }
-
-//     });
-
-//     browser.close();
-//     return result;
-// };
-
 // scrape().then((value) => {
 //     console.log(value); // Success!   
 // });
 
 const puppeteer = require('puppeteer');
-var csv = require("fast-csv");
-const fs = require('fs'); 
+// var csv = require("fast-csv");
+// const fs = require('fs'); 
 
-var stream = fs.createReadStream("name_titles.csv");
+// var stream = fs.createReadStream("name_titles.csv");
 
-csv.fromStream(stream, { headers: true })
-    .validate(function (data) {
-        // empty name or last name
-        return (data.First_Name !== '' && data.Last_Name !== ''); 
-    })
-    .on("data-invalid", function (data) {
-        //do something with invalid row
-        console.log(data)
-    })
-    .on("data", function (data) {
-        // console.log(data);
-    })
-    .on("end", function () {
-        console.log("done");
-    });
+// var csvStream = csv.createWriteStream({headers: true}),
+//     writableStream = fs.createWriteStream("name_titles_updated.csv");
 
-return;
+// writableStream.on("finish", function(){
+//   console.log("DONE!");
+// });
+
+// csvStream.pipe(writableStream);
+
+// csv.fromStream(stream, { headers: true })
+//     .validate(function (data) {
+//         // empty name or last name
+//         return (data.First_Name !== '' && data.Last_Name !== ''); 
+//     })
+//     .on("data-invalid", function (data) {
+//         //do something with invalid row
+//         console.log(data)
+//     })
+//     .on("data", function (data) {
+//         // console.log(data);
+//         data.First_Name = data.First_Name + ' Updated';
+//         csvStream.write(data);
+
+//     })
+//     .on("end", function () {
+//         console.log("done");
+//         csvStream.end();
+
+//     });
+
+// return;
 
 var CREDS = [];
 CREDS['username'] = 'pablovv2016@gmail.com';
 CREDS['password'] = 'Osito123$';
 
-
 let scrap = async () => {
     const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
 
-    // let expire = new Date();
-    // expire.setDate(expire.getDate() + 1);
-
-    // const cookies = [
-    //     {
-    //       name: 'JSESSIONID',
-    //       value: '"ajax:1023276565147052080"',
-    //       domain: '.www.linkedin.com',
-    //       path: '/',
-    //       expires: expire.getTime(),
-    //       size: 36,
-    //       httpOnly: false,
-    //       secure: true,
-    //       session: true,
-    //     },
-    //     {
-    //       name: 'UserMatchHistory',
-    //       value: 'AQJKPuZWkZjVXgAAAWYhMjHch0cm1CzrF7SNdISAKhvWEgVQw_fftschnSm2DvQQ-6q8HOxS_AJBsQFJ2k5et1_juEBBtAuXaIb74zMsjK4xOHmhui9F8Orrmd4_qTCu8zDpK5LS-MvPhyY-ZcLoYeEV8qn9o9IRMA',
-    //       domain: '.ads.linkedin.com',
-    //       path: '/',
-    //       expires: expire,
-    //       size: 178,
-    //       httpOnly: false,
-    //       secure: true,
-    //       session: true,
-    //     },
-    //   ];
-    //   await page.setCookie(...cookies);
+    await page.setViewport({ width: 1200, height: 720 })
 
     await page.goto('https://www.linkedin.com/uas/login?session_redirect=%2Fvoyager%2FloginRedirect%2Ehtml&fromSignIn=true&trk=uno-reg-join-sign-in');
-
-    // await page.goto('https://www.linkedin.com/');
 
     await page.type('#session_key-login', CREDS.username);
     await page.type('#session_password-login', CREDS.password);
@@ -116,29 +77,33 @@ let scrap = async () => {
 
     await page.goto('https://www.linkedin.com');
 
-    await page.type('#extended-nav-search input', 'Jueputa que rico');
-
-
-
-    // for (var element of elements) { // Loop through each proudct
-    //     let title = element.childNodes[5].innerText; // Select the title
-    //     let price = element.childNodes[7].children[0].innerText; // Select the price
-
-    //     data.push({ title, price }); // Push an object with the data onto our array
-    // }
-
-    // return data; // Return our data array
-
-    //browser.close();
-    // return result; // Return the data
-
-
     return page;
 };
 
-// scrape().then((value) => {
-//     console.log(value); // Success!
-// });
+var linkedinPage = scrap();
 
+let searchPerson = async (name) => {
+    this.name = name;
+    linkedinPage.then(async (page) => {
+        let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + name + '&origin=GLOBAL_SEARCH_HEADER';
+        await page.goto(searchUrl);
+        let possiblePeople = getPossiblePeople(page);
+        possiblePeople.then((links) => {
+            console.log(links);
+        })
+    });
+}
 
-scrap();
+let getPossiblePeople = async (page) => {
+    await page.waitFor(1000);
+
+    await page.waitForSelector('a.search-result__result-link');
+    const peopleLinks = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a.search-result__result-link'))
+        return links.map(link => link.href);// .slice(0, 10)
+    });
+
+    return peopleLinks;
+};
+
+searchPerson('Pablo Velez');
