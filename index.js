@@ -89,11 +89,12 @@ let searchPerson = async (person, callback) => {
         let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
         await page.goto(searchUrl);
 
-        let possiblePeople = getPossiblePeople(page, callback);
+        let possiblePeople = getPossiblePeople(page);
         possiblePeople.then((links) => { 
             if (links && links.length > 0) {
                 makeMatch(page, links, person, callback);
             } else {
+                person.First_Name = person.First_Name + ' - No found hence Not Updated';
                 callback();
             }
         });
@@ -101,7 +102,7 @@ let searchPerson = async (person, callback) => {
     });
 };
 
-let getPossiblePeople = async (page, callback) => {
+let getPossiblePeople = async (page) => {
     let peopleLinks = void 0;
     try {
         await page.waitForSelector('div.search-result__info a.search-result__result-link', { timeout: 1000 });
