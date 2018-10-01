@@ -63,7 +63,7 @@ let scrap = async () => {
     const browser = await puppeteer.launch({ headless: false });
     const page = await browser.newPage();
 
-    await page.setViewport({ width: 1200, height: 720 })
+    await page.setViewport({ width: 1200, height: 1200 })
 
     await page.goto('https://www.linkedin.com/uas/login?session_redirect=%2Fvoyager%2FloginRedirect%2Ehtml&fromSignIn=true&trk=uno-reg-join-sign-in');
 
@@ -82,28 +82,95 @@ let scrap = async () => {
 
 var linkedinPage = scrap();
 
-let searchPerson = async (name) => {
-    this.name = name;
+let searchPerson = async (person) => {
     linkedinPage.then(async (page) => {
-        let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + name + '&origin=GLOBAL_SEARCH_HEADER';
+        let query = getQueryString(person);
+        let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
         await page.goto(searchUrl);
         let possiblePeople = getPossiblePeople(page);
-        possiblePeople.then((links) => {
-            console.log(links);
-        })
+        makeMatch(page, possiblePeople, person);
     });
-}
+};
 
 let getPossiblePeople = async (page) => {
     await page.waitFor(1000);
 
-    await page.waitForSelector('a.search-result__result-link');
+    await page.waitForSelector('div.search-result__info a.search-result__result-link');
     const peopleLinks = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a.search-result__result-link'))
-        return links.map(link => link.href);// .slice(0, 10)
+        const links = Array.from(document.querySelectorAll('div.search-result__info a.search-result__result-link'))
+        return links.map(link => link.href);// .slice(0, 10) 
     });
 
     return peopleLinks;
 };
 
-searchPerson('Pablo Velez');
+let makeMatch = async (page, possiblePeople, person) => {
+    possiblePeople.then((links) => {
+        links.forEach(link => {
+            matchPerson(page, link, person)
+        });
+    });
+}
+
+function getQueryString(person) {
+    let query = '';
+    query += person.First_Name ? person.First_Name + ' ' : '';
+    query += person.Last_Name ? person.Last_Name : '';
+    query += person.Job_title ? ', ' + person.Job_title : '';
+    query += person.Company_Name ? ', ' + person.Company_Name : '';
+
+    return query;
+}
+
+async function matchPerson(page, link, person) {
+    await page.goto(link);
+    await page.evaluate( () => {
+        window.scrollBy(0, window.innerHeight);
+    }); 
+    // get job information
+    await page.waitForSelector('#experience-section');
+    const experience = await page.$eval('#experience-section', el => el.innerText);
+    let jobInfo = experience.split(/\r?\n/);
+    jobInfo = getCompanyAndTitle(jobInfo);
+    // get the state
+    console.log(jobInfo);
+
+}
+
+function getCompanyAndTitle(jobInfo) {
+    let companyAndTitle = {};
+    if (jobInfo[1] === 'Company Name') {
+        companyAndTitle.company = jobInfo[2];
+        let titleIndex = jobInfo.indexOf('Title');
+        companyAndTitle.title = jobInfo[titleIndex + 1];
+
+    } else {
+        companyAndTitle.title = jobInfo[1];
+        companyAndTitle.company = jobInfo[3];
+    }
+
+    return companyAndTitle;
+}
+
+//TODO confirm if is the person (loop over all companies and compare with company)
+
+
+const fakePerson = {
+    First_Name: 'Angelica',
+    Last_Name: 'Cuellar',
+    Email: 'estevan.dufrin@rigzone.comm',
+    Job_title: '',
+    Company_Name: 'Inbani',
+    Company_update: '',
+    Title_update: '',
+    City: '',
+    State_Region: '',
+    City_update: '',
+    State_update: '',
+    Industry: '',
+    Employees: '',
+    Phone_Number: ''
+
+}
+
+searchPerson(fakePerson);
