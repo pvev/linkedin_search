@@ -37,7 +37,7 @@ var parser = csv.fromStream(stream, { headers: true })
     //     // empty name or last name
     //     // return (data.First_Name !== '' && data.Last_Name !== ''); 
     // })
-    // .on("data-invalid", function (data) {
+    // .on("data-invalid", function (data) {   
     //     //do something with invalid row
     //     console.log(data) 
     // })
@@ -47,7 +47,6 @@ var parser = csv.fromStream(stream, { headers: true })
             parser.resume();
             csvStream.write(data);
         });
-
     })
     .on("end", function () {
         console.log("done");
@@ -55,7 +54,7 @@ var parser = csv.fromStream(stream, { headers: true })
 
     });
 
-// return;
+// return;  
 
 var CREDS = [];
 CREDS['username'] = 'pablovv2016@gmail.com';
@@ -89,28 +88,36 @@ let searchPerson = async (person, callback) => {
         let query = getQueryString(person);
         let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
         await page.goto(searchUrl);
-        let possiblePeople = getPossiblePeople(page);
-        makeMatch(page, possiblePeople, person, callback);
+
+        let possiblePeople = getPossiblePeople(page, callback);
+        possiblePeople.then((links) => { 
+            if (links && links.length > 0) {
+                makeMatch(page, links, person, callback);
+            } else {
+                callback();
+            }
+        });
+
     });
 };
 
-let getPossiblePeople = async (page) => {
-    await page.waitFor(1000);
-
-    await page.waitForSelector('div.search-result__info a.search-result__result-link');
-    const peopleLinks = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('div.search-result__info a.search-result__result-link'))
-        return links.map(link => link.href);// .slice(0, 10) 
-    });
-
+let getPossiblePeople = async (page, callback) => {
+    let peopleLinks = void 0;
+    try {
+        await page.waitForSelector('div.search-result__info a.search-result__result-link', { timeout: 1000 });
+        peopleLinks = await page.evaluate(() => {
+            const links = Array.from(document.querySelectorAll('div.search-result__info a.search-result__result-link'))
+            return links.map(link => link.href).slice(0, 10);
+        });
+    } catch (error) {
+        console.log('Error, Person Not Found');
+    }
     return peopleLinks;
 };
 
-let makeMatch = async (page, possiblePeople, person, callback) => {
-    possiblePeople.then((links) => {
-        links.forEach(link => {
-            matchPerson(page, link, person, callback)
-        });
+let makeMatch = async (page, links, person, callback) => {
+    links.forEach(link => {
+        matchPerson(page, link, person, callback)
     });
 }
 
@@ -136,8 +143,15 @@ async function matchPerson(page, link, person, callback) {
     jobInfo = getCompanyAndTitle(jobInfo);
     // console.log(jobInfo);
     /* get the state */
+    await page.waitForSelector('section.pv-profile-section');
+    const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
+    let profileInfo = profile.split(/\r?\n/);
+    profileInfo = getCityAndState(profileInfo);
+
     person.Title_update = jobInfo.title;
     person.Company_update = jobInfo.company;
+    person.City_update = profileInfo.city;
+    person.State_update = profileInfo.state;
     callback();
 
 }
@@ -148,16 +162,31 @@ function getCompanyAndTitle(jobInfo) {
         companyAndTitle.company = jobInfo[2];
         let titleIndex = jobInfo.indexOf('Title');
         companyAndTitle.title = jobInfo[titleIndex + 1];
-
     } else {
         companyAndTitle.title = jobInfo[1];
         companyAndTitle.company = jobInfo[3];
     }
-
     return companyAndTitle;
 }
 
-//TODO confirm if is the person (loop over all companies and compare with company)
+function getCityAndState(info) {
+    let cityAndState = {};
+    let profileInfo = info[0].split(',');
+
+    if (profileInfo[0]) {
+        cityAndState.city = profileInfo[0];
+    } else {
+        cityAndState.city = 'No city in the profile'
+    }
+    if (profileInfo[1]) {
+        cityAndState.state = profileInfo[1];
+    } else {
+        cityAndState.state = 'No state in the profile'
+    }
+    return cityAndState;
+}
+
+//TODO confirm if is the person (loop over all companies and compare with company) 
 function confirmPerson(jobInfo, person) {
     let isThePerson = false;
     jobInfo.forEach((info, index) => {
@@ -170,22 +199,22 @@ function confirmPerson(jobInfo, person) {
     return isThePerson;
 }
 
-const fakePerson = {
-    First_Name: 'Angelica',
-    Last_Name: 'Cuellar',
-    Email: 'estevan.dufrin@rigzone.comm',
-    Job_title: '',
-    Company_Name: 'Inbani',
-    Company_update: '',
-    Title_update: '',
-    City: '',
-    State_Region: '',
-    City_update: '',
-    State_update: '',
-    Industry: '',
-    Employees: '',
-    Phone_Number: ''
+// const fakePerson = {
+//     First_Name: 'Benito',
+//     Last_Name: 'Camelas',
+//     Email: 'estevan.dufrin@rigzone.comm',
+//     Job_title: '',
+//     Company_Name: 'Alert Logicas',
+//     Company_update: '',
+//     Title_update: '',
+//     City: '',
+//     State_Region: '',
+//     City_update: '',
+//     State_update: '',
+//     Industry: '',
+//     Employees: '',
+//     Phone_Number: ''
 
-}
+// }
 
 // searchPerson(fakePerson);
