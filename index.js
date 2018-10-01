@@ -4,6 +4,10 @@ const fs = require('fs');
 
 var stream = fs.createReadStream("name_titles.1.csv");
 
+var CREDS = [];
+CREDS['username'] = 'pablovv2016@gmail.com';
+CREDS['password'] = 'Osito123$';
+
 var csvStream = csv.createWriteStream({ headers: true }),
     writableStream = fs.createWriteStream("name_titles_updated2.csv");
 
@@ -26,10 +30,6 @@ var parser = csv.fromStream(stream, { headers: true })
         csvStream.end();
 
     });
-
-var CREDS = [];
-CREDS['username'] = 'pablovv2016@gmail.com';
-CREDS['password'] = 'Osito123$';
 
 let scrap = async () => {
     const browser = await puppeteer.launch({ headless: false });
@@ -157,7 +157,7 @@ function getCityAndState(info) {
     return cityAndState;
 }
 
-//TODO confirm if is the person (loop over all companies and compare with company) 
+//TODO confirm if is the person (loop over all companies and compare with company)  
 function confirmPerson(jobInfo, person) {
     let isThePerson = false;
     jobInfo.forEach((info, index) => {
@@ -171,7 +171,7 @@ function confirmPerson(jobInfo, person) {
 }
 
 // const fakePerson = {
-//     First_Name: 'Benito',
+//     First_Name: 'Benito',  
 //     Last_Name: 'Camelas',
 //     Email: 'estevan.dufrin@rigzone.comm',
 //     Job_title: '',
