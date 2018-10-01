@@ -1,22 +1,3 @@
-// const puppeteer = require('puppeteer');
-
-// async function getPic() {
-//   const browser = await puppeteer.launch({headless: false});
-//   const page = await browser.newPage();
-//   await page.goto('https://google.com');
-//   await page.screenshot({path: 'google.png'});
-
-//   await browser.close();
-// }
-
-// getPic();
-
-// const puppeteer = require('puppeteer');
-
-// scrape().then((value) => {
-//     console.log(value); // Success!   
-// });
-
 const puppeteer = require('puppeteer');
 var csv = require("fast-csv");
 const fs = require('fs');
@@ -33,14 +14,6 @@ writableStream.on("finish", function () {
 csvStream.pipe(writableStream);
 
 var parser = csv.fromStream(stream, { headers: true })
-    // .validate(function (data) {
-    //     // empty name or last name
-    //     // return (data.First_Name !== '' && data.Last_Name !== ''); 
-    // })
-    // .on("data-invalid", function (data) {   
-    //     //do something with invalid row
-    //     console.log(data) 
-    // })
     .on("data", function (data) {
         parser.pause();
         searchPerson(data, () => {
@@ -53,8 +26,6 @@ var parser = csv.fromStream(stream, { headers: true })
         csvStream.end();
 
     });
-
-// return;  
 
 var CREDS = [];
 CREDS['username'] = 'pablovv2016@gmail.com';
@@ -154,7 +125,6 @@ async function matchPerson(page, link, person, callback) {
     person.City_update = profileInfo.city;
     person.State_update = profileInfo.state;
     callback();
-
 }
 
 function getCompanyAndTitle(jobInfo) {
