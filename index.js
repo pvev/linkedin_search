@@ -18,40 +18,42 @@
 // });
 
 const puppeteer = require('puppeteer');
-// var csv = require("fast-csv");
-// const fs = require('fs'); 
+var csv = require("fast-csv");
+const fs = require('fs');
 
-// var stream = fs.createReadStream("name_titles.csv");
+var stream = fs.createReadStream("name_titles.1.csv");
 
-// var csvStream = csv.createWriteStream({headers: true}),
-//     writableStream = fs.createWriteStream("name_titles_updated.csv");
+var csvStream = csv.createWriteStream({ headers: true }),
+    writableStream = fs.createWriteStream("name_titles_updated2.csv");
 
-// writableStream.on("finish", function(){
-//   console.log("DONE!");
-// });
+writableStream.on("finish", function () {
+    console.log("DONE!");
+});
 
-// csvStream.pipe(writableStream);
+csvStream.pipe(writableStream);
 
-// csv.fromStream(stream, { headers: true })
-//     .validate(function (data) {
-//         // empty name or last name
-//         return (data.First_Name !== '' && data.Last_Name !== ''); 
-//     })
-//     .on("data-invalid", function (data) {
-//         //do something with invalid row
-//         console.log(data)
-//     })
-//     .on("data", function (data) {
-//         // console.log(data);
-//         data.First_Name = data.First_Name + ' Updated';
-//         csvStream.write(data);
+var parser = csv.fromStream(stream, { headers: true })
+    // .validate(function (data) {
+    //     // empty name or last name
+    //     // return (data.First_Name !== '' && data.Last_Name !== ''); 
+    // })
+    // .on("data-invalid", function (data) {
+    //     //do something with invalid row
+    //     console.log(data) 
+    // })
+    .on("data", function (data) {
+        parser.pause();
+        searchPerson(data, () => {
+            parser.resume();
+            csvStream.write(data);
+        });
 
-//     })
-//     .on("end", function () {
-//         console.log("done");
-//         csvStream.end();
+    })
+    .on("end", function () {
+        console.log("done");
+        csvStream.end();
 
-//     });
+    });
 
 // return;
 
@@ -82,13 +84,13 @@ let scrap = async () => {
 
 var linkedinPage = scrap();
 
-let searchPerson = async (person) => {
+let searchPerson = async (person, callback) => {
     linkedinPage.then(async (page) => {
         let query = getQueryString(person);
         let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
         await page.goto(searchUrl);
         let possiblePeople = getPossiblePeople(page);
-        makeMatch(page, possiblePeople, person);
+        makeMatch(page, possiblePeople, person, callback);
     });
 };
 
@@ -104,10 +106,10 @@ let getPossiblePeople = async (page) => {
     return peopleLinks;
 };
 
-let makeMatch = async (page, possiblePeople, person) => {
+let makeMatch = async (page, possiblePeople, person, callback) => {
     possiblePeople.then((links) => {
         links.forEach(link => {
-            matchPerson(page, link, person)
+            matchPerson(page, link, person, callback)
         });
     });
 }
@@ -122,18 +124,21 @@ function getQueryString(person) {
     return query;
 }
 
-async function matchPerson(page, link, person) {
+async function matchPerson(page, link, person, callback) {
     await page.goto(link);
-    await page.evaluate( () => {
+    await page.evaluate(() => {
         window.scrollBy(0, window.innerHeight);
-    }); 
-    // get job information
+    });
+    /* get job information */
     await page.waitForSelector('#experience-section');
     const experience = await page.$eval('#experience-section', el => el.innerText);
     let jobInfo = experience.split(/\r?\n/);
     jobInfo = getCompanyAndTitle(jobInfo);
-    // get the state
-    console.log(jobInfo);
+    // console.log(jobInfo);
+    /* get the state */
+    person.Title_update = jobInfo.title;
+    person.Company_update = jobInfo.company;
+    callback();
 
 }
 
@@ -153,7 +158,17 @@ function getCompanyAndTitle(jobInfo) {
 }
 
 //TODO confirm if is the person (loop over all companies and compare with company)
-
+function confirmPerson(jobInfo, person) {
+    let isThePerson = false;
+    jobInfo.forEach((info, index) => {
+        if (info === 'Company Name') {
+            if (jobInfo[index + 1].toLowerCase().trim().search(person.Job_title.toLowerCase().trim()) !== -1) {
+                isThePerson = true;
+            }
+        }
+    });
+    return isThePerson;
+}
 
 const fakePerson = {
     First_Name: 'Angelica',
@@ -173,4 +188,4 @@ const fakePerson = {
 
 }
 
-searchPerson(fakePerson);
+// searchPerson(fakePerson);
