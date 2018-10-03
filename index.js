@@ -4,9 +4,9 @@ const csv = require("fast-csv");
 const fs = require('fs');
 const linkedinConnection = connection.connect;
 
-var contacts = [];
+var contacts = [], contactsEnd=4, contactsStart=0, maxTries= 4, queryTries = 0;
 
-var stream = fs.createReadStream("test-to-populate.csv");
+var stream = fs.createReadStream("contacts-to-populate.csv");
 
 csv.fromStream(stream, { headers: true })
   .on("data", function (data) {
@@ -19,13 +19,13 @@ csv.fromStream(stream, { headers: true })
 
 let writeCsv = () => {
   var csvStream = csv.createWriteStream({ headers: true }),
-    writableStream = fs.createWriteStream("test-to-populate-updated.csv");
+    writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+".csv");
 
   csvStream.pipe(writableStream);
 
-  contacts.forEach((contact) => {
-    csvStream.write(contact);
-  });
+  for (let i = contactsStart; i < contactsEnd; i++) {
+    csvStream.write(contacts[i]);
+  }
 
   writableStream.on("finish", function () {
     console.log("DONE WRITING!");
@@ -36,7 +36,6 @@ let writeCsv = () => {
 let startSearch = async () => {
   let page = linkedinConnection();
   await asyncForEach(contacts, async (contact) => {
-    console.log('first_name:  ', contact.first_name);
     // filter if empty name
     let filter = filterContact(contact);
     if (filter) {
@@ -45,12 +44,21 @@ let startSearch = async () => {
     // get the profile link
     let link = '';
     try {
-      link = await searchPersonAndGetLink(contact, page);
+      queryTries = 0;
+      
+      do {
+        let query = getQueryString(contact);
+        console.log(query);
+        link = await searchPersonAndGetLink(contact, page, query);
+      } while(link == '' && queryTries < maxTries);
+
       if (link == '') {
         return false;
       }
+      contact.link = link;
       // Get person info
-      await modifyPersonInfo(page, link, contact);
+      let updated = await modifyPersonInfo(page, link, contact); 
+      console.log(updated);
     } catch (error) {
       console.log('An error occurred while getting the link', error);
       return false;
@@ -60,7 +68,7 @@ let startSearch = async () => {
 }
 
 async function asyncForEach(array, callback) {
-  for (let index = 0; index < array.length; index++) {
+  for (let index = contactsStart; index < contactsEnd; index++) {
     await callback(array[index], index, array)
   }
 }
@@ -74,10 +82,10 @@ let filterContact = (contact) => {
   return filter;
 }
 
-let searchPersonAndGetLink = (person, linkedinPage) => {
+let searchPersonAndGetLink = (person, linkedinPage, query) => {
+  queryTries++;
   return new Promise(resolve => {
     linkedinPage.then(async (page) => {
-      let query = getQueryString(person);
       let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
       await page.goto(searchUrl);
 
@@ -86,10 +94,9 @@ let searchPersonAndGetLink = (person, linkedinPage) => {
       personLinks.then((links) => {
         if (links && links.length > 0) {
           if (links.length > 1) {
-            person.log = 'Not updated - More than one found';
+            person.log = 'Not updated - More than one found'; 
             resolve('');
           }
-          person.link = links[0];
           resolve(links[0]);
         } else {
           person.log = 'Not updated - Not found';
@@ -115,44 +122,51 @@ let getPossiblePeople = async (page) => {
 };
 
 function getQueryString(person) {
+  console.log(queryTries);
   let query = '';
   query += person.first_name ? person.first_name + ' ' : '';
   query += person.last_name ? person.last_name : '';
-  query += person.job_title ? ', ' + person.job_title : '';
-  query += person.company_name ? ', ' + person.company_name : '';
-
+  if(queryTries < 1) {
+    query += person.job_title ? ', ' + person.job_title : '';
+  }
+  if (queryTries < 2) {
+    query += person.company_name ? ', ' + person.company_name : '';
+  }
   return query;
 }
 
 async function modifyPersonInfo(linkedinPage, link, person) {
-  linkedinPage.then(async (page) => {
-    await page.goto(link);
-    await page.evaluate(() => {
-      window.scrollBy(0, window.innerHeight);
+  return new Promise(resolve => {
+    linkedinPage.then(async (page) => {
+      try {
+        await page.goto(link);
+        await page.evaluate(() => {
+          window.scrollBy(0, window.innerHeight);
+        });
+        /* get job information */
+        await page.waitForSelector('#experience-section');
+        const experience = await page.$eval('#experience-section', el => el.innerText);
+        let jobInfoBase = experience.split(/\r?\n/);
+        jobInfo = getCompanyAndTitle(jobInfoBase);
+        //console.log(jobInfoBase);
+  
+        /* get the state */
+        await page.waitForSelector('section.pv-profile-section');
+        const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
+        let profileInfo = profile.split(/\r?\n/);
+        profileInfo = getCityAndState(profileInfo);
+  
+        person.title_update = jobInfo.title;
+        person.company_update = jobInfo.company;
+        person.city_update = profileInfo.city;
+        person.state_update = profileInfo.state;
+        person.log = 'Successfully updated';
+        resolve('updated ' + person.first_name + ' ' + person.last_name);
+      } catch (error) {
+        console.log('An error occurred while updating person');
+      }
     });
-    /* get job information */
-    await page.waitForSelector('#experience-section');
-    const experience = await page.$eval('#experience-section', el => el.innerText);
-    let jobInfo = experience.split(/\r?\n/);
-    jobInfo = getCompanyAndTitle(jobInfo);
-    // console.log(jobInfo);
-
-    /* get the state */
-    await page.waitForSelector('section.pv-profile-section');
-    const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
-    let profileInfo = profile.split(/\r?\n/);
-    profileInfo = getCityAndState(profileInfo);
-
-    updatePersonInfo(jobInfo, profileInfo, person);
   });
-}
-
-function updatePersonInfo(jobInfo, profileInfo, person) {
-  person.Title_update = jobInfo.title;
-  person.Company_update = jobInfo.company;
-  person.City_update = profileInfo.city;
-  person.State_update = profileInfo.state;
-  person.log = 'Successfully updated';
 }
 
 function getCompanyAndTitle(jobInfo) {
@@ -175,7 +189,7 @@ function getCityAndState(info) {
   if (profileInfo[0]) {
     cityAndState.city = profileInfo[0];
   } else {
-    cityAndState.city = 'No city in the profile'
+    cityAndState.city = 'No city in the profile '
   }
   if (profileInfo[1]) {
     cityAndState.state = profileInfo[1];
@@ -184,36 +198,3 @@ function getCityAndState(info) {
   }
   return cityAndState;
 }
-
-//TODO confirm if is the person (loop over all companies and compare with company)
-// function confirmPerson(jobInfo, person) {
-//   let isThePerson = false;
-//   jobInfo.forEach((info, index) => {
-//     if (info === 'Company Name') {
-//       if (jobInfo[index + 1].toLowerCase().trim().search(person.job_title.toLowerCase().trim()) !== -1) {
-//         isThePerson = true;
-//       }
-//     }
-//   });
-//   return isThePerson;
-// }
-
-  // const fakePerson = {  
-  //     first_name: 'Benito',  
-  //     last_name: 'Camelas',
-  //     Email: 'estevan.dufrin@rigzone.comm',
-  //     job_title: '',
-  //     company_name: 'Alert Logicas',
-  //     Company_update: '',
-  //     Title_update: '',
-  //     City: '',
-  //     State_Region: '',
-  //     City_update: '',
-  //     State_update: '',
-  //     Industry: '',
-  //     Employees: '',
-  //     Phone_Number: ''
-
-  // }
-
-  // searchPerson(fakePerson);

@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer');
 const CREDS = [];
-CREDS['username'] = 'pablovv2016@gmail.com';
+CREDS['username'] = 'pvelez@cafetosoftware.com';
 CREDS['password'] = 'Osito123$';
 
 module.exports = {
