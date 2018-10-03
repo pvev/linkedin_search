@@ -8,7 +8,7 @@ var contacts = [];
 
 var stream = fs.createReadStream("test-to-populate.csv");
 
-  csv.fromStream(stream, { headers: true })
+csv.fromStream(stream, { headers: true })
   .on("data", function (data) {
     contacts.push(data);
   })
@@ -35,7 +35,8 @@ let writeCsv = () => {
 
 let startSearch = async () => {
   let page = linkedinConnection();
-  contacts.forEach(async (contact) => {
+  await asyncForEach(contacts, async (contact) => {
+    console.log('first_name:  ', contact.first_name);
     // filter if empty name
     let filter = filterContact(contact);
     if (filter) {
@@ -49,13 +50,19 @@ let startSearch = async () => {
         return false;
       }
       // Get person info
-      await updatePersonInfo(page, link, contact);
+      await modifyPersonInfo(page, link, contact);
     } catch (error) {
       console.log('An error occurred while getting the link', error);
       return false;
     }
   });
   writeCsv();
+}
+
+async function asyncForEach(array, callback) {
+  for (let index = 0; index < array.length; index++) {
+    await callback(array[index], index, array)
+  }
 }
 
 let filterContact = (contact) => {
@@ -67,26 +74,29 @@ let filterContact = (contact) => {
   return filter;
 }
 
-let searchPersonAndGetLink = async (person, linkedinPage) => {
-  linkedinPage.then(async (page) => {
-    let query = getQueryString(person);
-    let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
-    await page.goto(searchUrl);
+let searchPersonAndGetLink = (person, linkedinPage) => {
+  return new Promise(resolve => {
+    linkedinPage.then(async (page) => {
+      let query = getQueryString(person);
+      let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
+      await page.goto(searchUrl);
 
-    let personLinks = getPossiblePeople(page);
+      let personLinks = getPossiblePeople(page);
 
-    personLinks.then((links) => {
-      if (links && links.length > 0) {
-        if (links.length > 1) {
-          person.log = 'Not updated - More than one found';
+      personLinks.then((links) => {
+        if (links && links.length > 0) {
+          if (links.length > 1) {
+            person.log = 'Not updated - More than one found';
+            resolve('');
+          }
+          person.link = links[0];
+          resolve(links[0]);
+        } else {
+          person.log = 'Not updated - Not found';
+          resolve('');
         }
-        return links[0];
-      } else {
-        person.log = 'Not updated - Not found';
-      }
+      });
     });
-    return '';
-
   });
 };
 
@@ -114,25 +124,27 @@ function getQueryString(person) {
   return query;
 }
 
-async function updatePersonInfo(page, link, person) {
-  await page.goto(link);
-  await page.evaluate(() => {
-    window.scrollBy(0, window.innerHeight);
+async function modifyPersonInfo(linkedinPage, link, person) {
+  linkedinPage.then(async (page) => {
+    await page.goto(link);
+    await page.evaluate(() => {
+      window.scrollBy(0, window.innerHeight);
+    });
+    /* get job information */
+    await page.waitForSelector('#experience-section');
+    const experience = await page.$eval('#experience-section', el => el.innerText);
+    let jobInfo = experience.split(/\r?\n/);
+    jobInfo = getCompanyAndTitle(jobInfo);
+    // console.log(jobInfo);
+
+    /* get the state */
+    await page.waitForSelector('section.pv-profile-section');
+    const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
+    let profileInfo = profile.split(/\r?\n/);
+    profileInfo = getCityAndState(profileInfo);
+
+    updatePersonInfo(jobInfo, profileInfo, person);
   });
-  /* get job information */
-  await page.waitForSelector('#experience-section');
-  const experience = await page.$eval('#experience-section', el => el.innerText);
-  let jobInfo = experience.split(/\r?\n/);
-  jobInfo = getCompanyAndTitle(jobInfo);
-  console.log(jobInfo);
-
-  /* get the state */
-  await page.waitForSelector('section.pv-profile-section');
-  const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
-  let profileInfo = profile.split(/\r?\n/);
-  profileInfo = getCityAndState(profileInfo);
-
-  updatePersonInfo(jobInfo, profileInfo, person);
 }
 
 function updatePersonInfo(jobInfo, profileInfo, person) {
