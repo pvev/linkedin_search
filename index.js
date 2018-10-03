@@ -4,7 +4,7 @@ const csv = require("fast-csv");
 const fs = require('fs');
 const linkedinConnection = connection.connect;
 
-var contacts = [], contactsEnd=4, contactsStart=0, maxTries= 4, queryTries = 0;
+var contacts = [], contactsEnd=300, contactsStart=0, maxTries= 4, queryTries = 0;
 
 var stream = fs.createReadStream("contacts-to-populate.csv");
 
@@ -42,6 +42,7 @@ let startSearch = async () => {
       return false;
     }
     // get the profile link
+    let links = '';
     let link = '';
     try {
       queryTries = 0;
@@ -49,11 +50,27 @@ let startSearch = async () => {
       do {
         let query = getQueryString(contact);
         console.log(query);
-        link = await searchPersonAndGetLink(contact, page, query);
-      } while(link == '' && queryTries < maxTries);
+        links = await searchPersonAndGetLink(contact, page, query);
+      } while(links == '' && queryTries < maxTries);
 
-      if (link == '') {
+      if (links == '') {
+        // any link found
         return false;
+      } else if (links.length > 1) {
+        // several links were found
+        // let counter = 0;
+        // do {
+        //   let isTheOne = await lookForMatch(page, links[counter], contact);
+        //   if (isTheOne) {
+        //     console.log(links[counter]);
+        //     link = links[counter];
+        //   }
+        //   counter ++;
+        // } while (counter < links.length && link == '');
+        return false;
+      } else {
+        // Just one link was found
+        link = links[0];
       }
       contact.link = link;
       // Get person info
@@ -95,9 +112,10 @@ let searchPersonAndGetLink = (person, linkedinPage, query) => {
         if (links && links.length > 0) {
           if (links.length > 1) {
             person.log = 'Not updated - More than one found'; 
-            resolve('');
+            resolve(links);
+          } else {
+            resolve(links);
           }
-          resolve(links[0]);
         } else {
           person.log = 'Not updated - Not found';
           resolve('');
@@ -122,15 +140,15 @@ let getPossiblePeople = async (page) => {
 };
 
 function getQueryString(person) {
-  console.log(queryTries);
   let query = '';
   query += person.first_name ? person.first_name + ' ' : '';
   query += person.last_name ? person.last_name : '';
-  if(queryTries < 1) {
-    query += person.job_title ? ', ' + person.job_title : '';
+  console.log(queryTries);
+  if(queryTries < 1 || queryTries == 3) {
+    query += person.job_title ? ', ' + person.job_title.replace(/['"]+/g, '') : '';
   }
   if (queryTries < 2) {
-    query += person.company_name ? ', ' + person.company_name : '';
+    query += person.company_name ? ', ' + person.company_name.replace(/['"]+/g, '') : '';
   }
   return query;
 }
@@ -144,7 +162,7 @@ async function modifyPersonInfo(linkedinPage, link, person) {
           window.scrollBy(0, window.innerHeight);
         });
         /* get job information */
-        await page.waitForSelector('#experience-section');
+        await page.waitForSelector('#experience-section', { timeout: 10000 });
         const experience = await page.$eval('#experience-section', el => el.innerText);
         let jobInfoBase = experience.split(/\r?\n/);
         jobInfo = getCompanyAndTitle(jobInfoBase);
@@ -163,7 +181,8 @@ async function modifyPersonInfo(linkedinPage, link, person) {
         person.log = 'Successfully updated';
         resolve('updated ' + person.first_name + ' ' + person.last_name);
       } catch (error) {
-        console.log('An error occurred while updating person');
+        return true;
+        console.log('An error occurred while updating person: ', error);
       }
     });
   });
@@ -197,4 +216,43 @@ function getCityAndState(info) {
     cityAndState.state = 'No state in the profile'
   }
   return cityAndState;
+}
+
+
+async function lookForMatch(linkedinPage, link, person) {
+  return new Promise(resolve => {
+    linkedinPage.then(async (page) => {
+      try {
+        await page.goto(link);
+        await page.evaluate(() => {
+          window.scrollBy(0, window.innerHeight);
+        });
+        /* get job information */
+        await page.waitForSelector('#experience-section', { timeout: 1000 });
+        const experience = await page.$eval('#experience-section', el => el.innerText);
+        let jobInfoBase = experience.split(/\r?\n/);
+        let isThePerson = confirmPerson(jobInfoBase, person);
+        resolve(isThePerson);
+
+      } catch (error) {
+        console.log('An error occurred while looking for the person: ', error);
+      }
+    });
+  });
+}
+
+function confirmPerson(jobInfo, person) {
+  let isThePerson = false;
+  jobInfo.forEach((info, index) => {
+    try {
+      if (info === 'Company Name') {
+        if (jobInfo[index + 1].toLowerCase().trim() == person.company_name.toLowerCase().trim()) {
+          isThePerson = true;
+        }
+      }
+    } catch (error) {
+      console.log('did not found the company', error)
+    }
+  });
+  return isThePerson;
 }
