@@ -1,4 +1,6 @@
 .DS_Store
 /node_modules
-name_titles.csv
+name_titles*
 name_titles_updated.csv
+contacts*/
+data-json.json
