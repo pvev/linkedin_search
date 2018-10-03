@@ -1,3 +1,4 @@
+( function searchLinkedin() {
 const puppeteer = require('puppeteer');
 var csv = require("fast-csv");
 const fs = require('fs');
@@ -63,9 +64,13 @@ let searchPerson = async (person, callback) => {
         let possiblePeople = getPossiblePeople(page);
         possiblePeople.then((links) => { 
             if (links && links.length > 0) {
+                if (links.length > 1) {
+                    person.more_that_one = 'More than one found';
+                    callback();
+                }
                 makeMatch(page, links, person, callback);
             } else {
-                person.First_Name = person.First_Name + ' - No found hence Not Updated';
+                person.found = 'Not found';
                 callback();
             }
         });
@@ -113,6 +118,7 @@ async function matchPerson(page, link, person, callback) {
     const experience = await page.$eval('#experience-section', el => el.innerText);
     let jobInfo = experience.split(/\r?\n/);
     jobInfo = getCompanyAndTitle(jobInfo);
+
     // console.log(jobInfo);
     /* get the state */
     await page.waitForSelector('section.pv-profile-section');
@@ -124,6 +130,7 @@ async function matchPerson(page, link, person, callback) {
     person.Company_update = jobInfo.company;
     person.City_update = profileInfo.city;
     person.State_update = profileInfo.state;
+    person.found = '';
     callback();
 }
 
@@ -157,7 +164,7 @@ function getCityAndState(info) {
     return cityAndState;
 }
 
-//TODO confirm if is the person (loop over all companies and compare with company)  
+//TODO confirm if is the person (loop over all companies and compare with company)
 function confirmPerson(jobInfo, person) {
     let isThePerson = false;
     jobInfo.forEach((info, index) => {
@@ -170,7 +177,7 @@ function confirmPerson(jobInfo, person) {
     return isThePerson;
 }
 
-// const fakePerson = {
+// const fakePerson = {  
 //     First_Name: 'Benito',  
 //     Last_Name: 'Camelas',
 //     Email: 'estevan.dufrin@rigzone.comm',
@@ -189,3 +196,4 @@ function confirmPerson(jobInfo, person) {
 // }
 
 // searchPerson(fakePerson);
+})();
