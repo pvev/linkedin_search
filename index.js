@@ -4,7 +4,7 @@ const csv = require("fast-csv");
 const fs = require('fs');
 const linkedinConnection = connection.connect;
 
-var contacts = [], contactsEnd=300, contactsStart=0, maxTries= 4, queryTries = 0;
+var contacts = [], contactsEnd=150, contactsStart=0, maxTries= 3, queryTries = 0, reRun = false;
 
 var stream = fs.createReadStream("contacts-to-populate.csv");
 
@@ -17,31 +17,45 @@ csv.fromStream(stream, { headers: true })
     startSearch();
   });
 
-let writeCsv = () => {
+// let writeCsv = () => {
+//   var csvStream = csv.createWriteStream({ headers: true }),
+//     writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+"-2.csv");
+
+//   csvStream.pipe(writableStream);
+
+//   for (let i = contactsStart; i < contactsEnd; i++) { 
+//     csvStream.write(contacts[i]);
+//   }
+
+//   writableStream.on("finish", function () {
+//     console.log("DONE WRITING!");
+//     csvStream.end();
+//   });
+// }
+
+  const fecha = new Date().getTime();
+
   var csvStream = csv.createWriteStream({ headers: true }),
-    writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+".csv");
+    writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+"-"+fecha+".csv");
 
   csvStream.pipe(writableStream);
-
-  for (let i = contactsStart; i < contactsEnd; i++) {
-    csvStream.write(contacts[i]);
-  }
 
   writableStream.on("finish", function () {
     console.log("DONE WRITING!");
     csvStream.end();
   });
-}
 
 let startSearch = async () => {
   let page = linkedinConnection();
+  let counter = 0;
   await asyncForEach(contacts, async (contact) => {
+    counter ++;
     // filter if empty name
     let filter = filterContact(contact);
     if (filter) {
       return false;
     }
-    // get the profile link
+    // get the profile link 
     let links = '';
     let link = '';
     try {
@@ -49,13 +63,12 @@ let startSearch = async () => {
       
       do {
         let query = getQueryString(contact);
-        console.log(query);
         links = await searchPersonAndGetLink(contact, page, query);
       } while(links == '' && queryTries < maxTries);
 
       if (links == '') {
         // any link found
-        return false;
+        link = '';
       } else if (links.length > 1) {
         // several links were found
         // let counter = 0;
@@ -67,21 +80,25 @@ let startSearch = async () => {
         //   }
         //   counter ++;
         // } while (counter < links.length && link == '');
-        return false;
+        link = '';
       } else {
         // Just one link was found
         link = links[0];
       }
       contact.link = link;
       // Get person info
-      let updated = await modifyPersonInfo(page, link, contact); 
-      console.log(updated);
+      if (link != '') {
+        let updated = await modifyPersonInfo(page, link, contact); 
+        console.log(updated);
+      }
+      console.log(counter, ' contacts updated');
+      csvStream.write(contact);
     } catch (error) {
       console.log('An error occurred while getting the link', error);
       return false;
     }
   });
-  writeCsv();
+  // writeCsv();
 }
 
 async function asyncForEach(array, callback) {
@@ -95,7 +112,10 @@ let filterContact = (contact) => {
   if (contact.first_name == '' || contact.last_name == '') {
     contact.log = 'Not Updated - empty name';
     filter = true;
-  }
+  } 
+  // else if(reRun && contact.log !== 'Not updated - Not found') {
+  //   filter = true;
+  // }
   return filter;
 }
 
@@ -143,8 +163,7 @@ function getQueryString(person) {
   let query = '';
   query += person.first_name ? person.first_name + ' ' : '';
   query += person.last_name ? person.last_name : '';
-  console.log(queryTries);
-  if(queryTries < 1 || queryTries == 3) {
+  if(queryTries < 1) {
     query += person.job_title ? ', ' + person.job_title.replace(/['"]+/g, '') : '';
   }
   if (queryTries < 2) {
@@ -162,17 +181,26 @@ async function modifyPersonInfo(linkedinPage, link, person) {
           window.scrollBy(0, window.innerHeight);
         });
         /* get job information */
-        await page.waitForSelector('#experience-section', { timeout: 10000 });
-        const experience = await page.$eval('#experience-section', el => el.innerText);
-        let jobInfoBase = experience.split(/\r?\n/);
-        jobInfo = getCompanyAndTitle(jobInfoBase);
-        //console.log(jobInfoBase);
+        let jobInfo = '';
+        try {
+          // aqui es dónde mas falla https://github.com/GoogleChrome/puppeteer/issues/1694 (fuck)
+          const experience = await page.$eval('#experience-section', el => el.innerText);
+          let jobInfoBase = experience.split(/\r?\n/);
+          jobInfo = getCompanyAndTitle(jobInfoBase);
+        } catch (error) {
+          console.log('Error: failed finding experience section');
+          // throw error;
+        }
   
         /* get the state */
-        await page.waitForSelector('section.pv-profile-section');
-        const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
-        let profileInfo = profile.split(/\r?\n/);
-        profileInfo = getCityAndState(profileInfo);
+        let profileInfo = '';
+        try {
+          const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
+          let profileInfo = profile.split(/\r?\n/);
+          profileInfo = getCityAndState(profileInfo);
+        } catch (error) {
+          console.log('Error: failed finding profile section');
+        }
   
         person.title_update = jobInfo.title;
         person.company_update = jobInfo.company;
@@ -181,8 +209,8 @@ async function modifyPersonInfo(linkedinPage, link, person) {
         person.log = 'Successfully updated';
         resolve('updated ' + person.first_name + ' ' + person.last_name);
       } catch (error) {
+        console.log('An error occurred while updating person');
         return true;
-        console.log('An error occurred while updating person: ', error);
       }
     });
   });
@@ -217,7 +245,6 @@ function getCityAndState(info) {
   }
   return cityAndState;
 }
-
 
 async function lookForMatch(linkedinPage, link, person) {
   return new Promise(resolve => {
