@@ -4,7 +4,7 @@ const csv = require("fast-csv");
 const fs = require('fs');
 const linkedinConnection = connection.connect;
 
-var contacts = [], contactsEnd=150, contactsStart=0, maxTries= 3, queryTries = 0, reRun = false;
+var contacts = [], contactsStart = 1200, contactsEnd = 1400, maxTries = 3, queryTries = 0, reRun = false;
 
 var stream = fs.createReadStream("contacts-to-populate.csv");
 
@@ -17,39 +17,24 @@ csv.fromStream(stream, { headers: true })
     startSearch();
   });
 
-// let writeCsv = () => {
-//   var csvStream = csv.createWriteStream({ headers: true }),
-//     writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+"-2.csv");
+let fecha = new Date();
+fecha = fecha.getFullYear() + "-" + (fecha.getMonth() + 1) + "-" + fecha.getDay() + "-" + fecha.getHours() + "-" + fecha.getMinutes() + "-" + fecha.getSeconds();
 
-//   csvStream.pipe(writableStream);
+var csvStream = csv.createWriteStream({ headers: true }),
+  writableStream = fs.createWriteStream("contacts-to-populate-" + contactsStart + "-" + contactsEnd + "-" + fecha + ".csv");
 
-//   for (let i = contactsStart; i < contactsEnd; i++) { 
-//     csvStream.write(contacts[i]);
-//   }
+csvStream.pipe(writableStream);
 
-//   writableStream.on("finish", function () {
-//     console.log("DONE WRITING!");
-//     csvStream.end();
-//   });
-// }
-
-  const fecha = new Date().getTime();
-
-  var csvStream = csv.createWriteStream({ headers: true }),
-    writableStream = fs.createWriteStream("contacts-to-populate-"+contactsStart+"-"+contactsEnd+"-"+fecha+".csv");
-
-  csvStream.pipe(writableStream);
-
-  writableStream.on("finish", function () {
-    console.log("DONE WRITING!");
-    csvStream.end();
-  });
+writableStream.on("finish", function () {
+  console.log("DONE WRITING!");
+  csvStream.end();
+});
 
 let startSearch = async () => {
   let page = linkedinConnection();
   let counter = 0;
   await asyncForEach(contacts, async (contact) => {
-    counter ++;
+    counter++;
     // filter if empty name
     let filter = filterContact(contact);
     if (filter) {
@@ -60,11 +45,11 @@ let startSearch = async () => {
     let link = '';
     try {
       queryTries = 0;
-      
+
       do {
         let query = getQueryString(contact);
         links = await searchPersonAndGetLink(contact, page, query);
-      } while(links == '' && queryTries < maxTries);
+      } while (links == '' && queryTries < maxTries);
 
       if (links == '') {
         // any link found
@@ -79,7 +64,7 @@ let startSearch = async () => {
         //     link = links[counter];
         //   }
         //   counter ++;
-        // } while (counter < links.length && link == '');
+        // } while (counter < links.length && link == ''); 
         link = '';
       } else {
         // Just one link was found
@@ -88,7 +73,7 @@ let startSearch = async () => {
       contact.link = link;
       // Get person info
       if (link != '') {
-        let updated = await modifyPersonInfo(page, link, contact); 
+        let updated = await modifyPersonInfo(page, link, contact);
         console.log(updated);
       }
       console.log(counter, ' contacts updated');
@@ -98,7 +83,8 @@ let startSearch = async () => {
       return false;
     }
   });
-  // writeCsv();
+  console.log('Process end, bye!')
+  process.exit();
 }
 
 async function asyncForEach(array, callback) {
@@ -112,7 +98,7 @@ let filterContact = (contact) => {
   if (contact.first_name == '' || contact.last_name == '') {
     contact.log = 'Not Updated - empty name';
     filter = true;
-  } 
+  }
   // else if(reRun && contact.log !== 'Not updated - Not found') {
   //   filter = true;
   // }
@@ -123,24 +109,30 @@ let searchPersonAndGetLink = (person, linkedinPage, query) => {
   queryTries++;
   return new Promise(resolve => {
     linkedinPage.then(async (page) => {
-      let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
-      await page.goto(searchUrl);
+      try {
+        let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
+        await page.goto(searchUrl);
 
-      let personLinks = getPossiblePeople(page);
+        let personLinks = getPossiblePeople(page);
 
-      personLinks.then((links) => {
-        if (links && links.length > 0) {
-          if (links.length > 1) {
-            person.log = 'Not updated - More than one found'; 
-            resolve(links);
+        personLinks.then((links) => {
+          if (links && links.length > 0) {
+            if (links.length > 1) {
+              person.log = 'Not updated - More than one found';
+              resolve(links);
+            } else {
+              resolve(links);
+            }
           } else {
-            resolve(links);
+            person.log = 'Not updated - Not found';
+            resolve('');
           }
-        } else {
-          person.log = 'Not updated - Not found';
-          resolve('');
-        }
-      });
+        });
+      } catch (error) {
+        console.log('Error searching the person')
+        resolve('');
+      }
+
     });
   });
 };
@@ -163,7 +155,7 @@ function getQueryString(person) {
   let query = '';
   query += person.first_name ? person.first_name + ' ' : '';
   query += person.last_name ? person.last_name : '';
-  if(queryTries < 1) {
+  if (queryTries < 1) {
     query += person.job_title ? ', ' + person.job_title.replace(/['"]+/g, '') : '';
   }
   if (queryTries < 2) {
@@ -181,33 +173,37 @@ async function modifyPersonInfo(linkedinPage, link, person) {
           window.scrollBy(0, window.innerHeight);
         });
         /* get job information */
-        let jobInfo = '';
+        // let jobInfo = '';
         try {
           // aqui es dónde mas falla https://github.com/GoogleChrome/puppeteer/issues/1694 (fuck)
+          await page.waitForSelector('#experience-section');
           const experience = await page.$eval('#experience-section', el => el.innerText);
           let jobInfoBase = experience.split(/\r?\n/);
-          jobInfo = getCompanyAndTitle(jobInfoBase);
+          setCompanyAndTitle(jobInfoBase, person);
         } catch (error) {
           console.log('Error: failed finding experience section');
           // throw error;
         }
-  
+
         /* get the state */
-        let profileInfo = '';
+        // let profileInfo = '';
         try {
+          await page.waitForSelector('section.pv-profile-section');
           const profile = await page.$eval('section.pv-profile-section h3.pv-top-card-section__location', el => el.innerText);
           let profileInfo = profile.split(/\r?\n/);
-          profileInfo = getCityAndState(profileInfo);
+          setCityAndState(profileInfo, person);
         } catch (error) {
           console.log('Error: failed finding profile section');
         }
-  
-        person.title_update = jobInfo.title;
-        person.company_update = jobInfo.company;
-        person.city_update = profileInfo.city;
-        person.state_update = profileInfo.state;
+
+        // person.title_update = jobInfo.title;
+        // person.company_update = jobInfo.company;
+        // person.city_update = profileInfo.city;
+        // person.state_update = profileInfo.state;
         person.log = 'Successfully updated';
-        resolve('updated ' + person.first_name + ' ' + person.last_name);
+        setTimeout(() => {
+          resolve('updated ' + person.first_name + ' ' + person.last_name);
+        }, 100);
       } catch (error) {
         console.log('An error occurred while updating person');
         return true;
@@ -216,34 +212,30 @@ async function modifyPersonInfo(linkedinPage, link, person) {
   });
 }
 
-function getCompanyAndTitle(jobInfo) {
-  let companyAndTitle = {};
+function setCompanyAndTitle(jobInfo, person) {
   if (jobInfo[1] === 'Company Name') {
-    companyAndTitle.company = jobInfo[2];
+    person.company_update = jobInfo[2];
     let titleIndex = jobInfo.indexOf('Title');
-    companyAndTitle.title = jobInfo[titleIndex + 1];
+    person.title_update = jobInfo[titleIndex + 1];
   } else {
-    companyAndTitle.title = jobInfo[1];
-    companyAndTitle.company = jobInfo[3];
+    person.title_update = jobInfo[1];
+    person.company_update = jobInfo[3];
   }
-  return companyAndTitle;
 }
 
-function getCityAndState(info) {
-  let cityAndState = {};
+function setCityAndState(info, person) {
   let profileInfo = info[0].split(',');
 
   if (profileInfo[0]) {
-    cityAndState.city = profileInfo[0];
+    person.city_update = profileInfo[0];
   } else {
-    cityAndState.city = 'No city in the profile '
+    person.city_update = 'No city in the profile '
   }
   if (profileInfo[1]) {
-    cityAndState.state = profileInfo[1];
+    person.state_update = profileInfo[1];
   } else {
-    cityAndState.state = 'No state in the profile'
+    person.state_update = 'No state in the profile'
   }
-  return cityAndState;
 }
 
 async function lookForMatch(linkedinPage, link, person) {

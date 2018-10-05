@@ -1,7 +1,8 @@
 const puppeteer = require('puppeteer');
 const CREDS = [];
-CREDS['username'] = 'pvelez@cafetosoftware.com';
-CREDS['password'] = 'Osito123$';
+CREDS['username'] = 'pablogmz@hotmail.com';
+CREDS['password'] = 'C@fet02018';
+//CREDS['password'] = 'C@f3t02010';
 
 module.exports = {
   connect: async function () {
@@ -19,6 +20,12 @@ module.exports = {
       page.click('#btn-primary'),
       page.waitForNavigation({ waitUntil: 'networkidle0' }),
     ]);
+
+    page.on('error', error => {
+      debug(`Chrome Handler: GENERAL ERROR on: ${targetURL} : ${error}`);
+      debug(`GLOBAL CHROMEPOOL count after releasing instance on ERROR: ${global.chromepool.borrowed} for: ${targetURL}`);
+      global.chromepool.release(browser);
+  });
 
     await page.goto('https://www.linkedin.com');
 
