@@ -1,0 +1,26 @@
+{
+  "name": "linkedin_search",
+  "version": "1.0.0",
+  "description": "search linkedin contacts form a csv file using screen scraping",
+  "main": "index.js",
+  "dependencies": {
+    "fast-csv": "^2.4.1",
+    "nodemon": "^1.18.4",
+    "puppeteer": "^1.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "npm run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github-iwtp:pablovelezvidal/linkedin_search.git"
+  },
+  "keywords": [
+    "linkedin-search",
+    "search",
+    "i-hate-linkedin"
+  ],
+  "author": "Pablo Velez Vidal",
+  "license": "MIT"
+}
