@@ -4,9 +4,9 @@ const csv = require("fast-csv");
 const fs = require('fs');
 const linkedinConnection = connection.connect;
 
-var contacts = [], contactsStart = 1200, contactsEnd = 1400, maxTries = 3, queryTries = 0, reRun = false;
+var contacts = [], contactsStart = 0, contactsEnd = 10, maxTries = 3, queryTries = 0, reRun = false;
 
-var stream = fs.createReadStream("contacts-to-populate.csv");
+var stream = fs.createReadStream("contacts-to-populate-test.csv");
 
 csv.fromStream(stream, { headers: true })
   .on("data", function (data) {
@@ -38,38 +38,15 @@ let startSearch = async () => {
     // filter if empty name
     let filter = filterContact(contact);
     if (filter) {
+      csvStream.write(contact);
       return false;
     }
     // get the profile link 
-    let links = '';
     let link = '';
     try {
-      queryTries = 0;
+      let query = getQueryStringForGoogle(contact);
+      link = await searchPersonAndGetLinkFromGoogle(contact, page, query);
 
-      do {
-        let query = getQueryString(contact);
-        links = await searchPersonAndGetLink(contact, page, query);
-      } while (links == '' && queryTries < maxTries);
-
-      if (links == '') {
-        // any link found
-        link = '';
-      } else if (links.length > 1) {
-        // several links were found
-        // let counter = 0;
-        // do {
-        //   let isTheOne = await lookForMatch(page, links[counter], contact);
-        //   if (isTheOne) {
-        //     console.log(links[counter]);
-        //     link = links[counter];
-        //   }
-        //   counter ++;
-        // } while (counter < links.length && link == ''); 
-        link = '';
-      } else {
-        // Just one link was found
-        link = links[0];
-      }
       contact.link = link;
       // Get person info
       if (link != '') {
@@ -95,39 +72,39 @@ async function asyncForEach(array, callback) {
 
 let filterContact = (contact) => {
   let filter = false;
-  if (contact.first_name == '' || contact.last_name == '') {
+
+  if (contact.first_name === '' || contact.last_name === '') {
     contact.log = 'Not Updated - empty name';
     filter = true;
   }
-  // else if(reRun && contact.log !== 'Not updated - Not found') {
-  //   filter = true;
-  // }
+
+  if(contact.log === 'Successfully updated') {
+    filter = true;
+  }
+
   return filter;
 }
 
-let searchPersonAndGetLink = (person, linkedinPage, query) => {
-  queryTries++;
+let searchPersonAndGetLinkFromGoogle = (person, linkedinPage, query) => {
   return new Promise(resolve => {
     linkedinPage.then(async (page) => {
       try {
-        let searchUrl = 'https://www.linkedin.com/search/results/all/?keywords=' + query + '&origin=GLOBAL_SEARCH_HEADER';
+        let searchUrl = 'https://www.google.com/search?q=' + query;
         await page.goto(searchUrl);
+        console.log(person.first_name, ' - ', person.last_name);
 
-        let personLinks = getPossiblePeople(page);
+        let links = await getPossiblePeopleFromGoogle(page);
 
-        personLinks.then((links) => {
-          if (links && links.length > 0) {
-            if (links.length > 1) {
-              person.log = 'Not updated - More than one found';
-              resolve(links);
-            } else {
-              resolve(links);
-            }
-          } else {
-            person.log = 'Not updated - Not found';
-            resolve('');
+        if (links && links.length > 0) {
+          if(isDomain(links[0])){
+            console.log('jueputa it is', links[0]);
+            resolve(links[0]);
           }
-        });
+        } else {
+          person.log = 'Not updated - Not found';
+          resolve('');
+        }
+        resolve('');
       } catch (error) {
         console.log('Error searching the person')
         resolve('');
@@ -137,12 +114,16 @@ let searchPersonAndGetLink = (person, linkedinPage, query) => {
   });
 };
 
-let getPossiblePeople = async (page) => {
+function isDomain(url) {
+  return ( /(ftp|http|https):\/\/?(?:www\.)?linkedin.com(\w+:{0,1}\w*@)?(\S+)(:([0-9])+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/.test(url));
+}
+ 
+let getPossiblePeopleFromGoogle = async (page) => {
   let peopleLinks = void 0;
   try {
-    await page.waitForSelector('div.search-result__info a.search-result__result-link', { timeout: 1000 });
+    await page.waitForSelector('.r > a', { timeout: 1000 });
     peopleLinks = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('div.search-result__info a.search-result__result-link'))
+      const links = Array.from(document.querySelectorAll('.r > a'));
       return links.map(link => link.href).slice(0, 10);
     });
   } catch (error) {
@@ -151,16 +132,13 @@ let getPossiblePeople = async (page) => {
   return peopleLinks;
 };
 
-function getQueryString(person) {
+function getQueryStringForGoogle(person) {
   let query = '';
-  query += person.first_name ? person.first_name + ' ' : '';
-  query += person.last_name ? person.last_name : '';
-  if (queryTries < 1) {
-    query += person.job_title ? ', ' + person.job_title.replace(/['"]+/g, '') : '';
-  }
-  if (queryTries < 2) {
-    query += person.company_name ? ', ' + person.company_name.replace(/['"]+/g, '') : '';
-  }
+  query += person.email ? person.email.replace(/['"]+/g, '') + ',' : '';
+  query += person.first_name ? person.first_name.replace(/['"]+/g, '') : '';
+  query += person.last_name ? ', ' + person.last_name.replace(/['"]+/g, '') : '';
+  query += ',linkedin'
+
   return query;
 }
 

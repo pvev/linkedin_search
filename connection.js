@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const CREDS = [];
-CREDS['username'] = 'pablogmz@hotmail.com';
-CREDS['password'] = 'C@fet02018';
+CREDS['username'] = 'test@gmail.com';
+CREDS['password'] = 'C@feto2018';
 //CREDS['password'] = 'C@f3t02010';
 
 module.exports = {
@@ -26,8 +26,6 @@ module.exports = {
       debug(`GLOBAL CHROMEPOOL count after releasing instance on ERROR: ${global.chromepool.borrowed} for: ${targetURL}`);
       global.chromepool.release(browser);
   });
-
-    await page.goto('https://www.linkedin.com');
 
     return page;
   }
