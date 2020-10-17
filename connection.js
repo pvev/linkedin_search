@@ -1,8 +1,8 @@
 const puppeteer = require('puppeteer');
 const CREDS = [];
 CREDS['username'] = 'pablogmz@hotmail.com';
-CREDS['password'] = 'C@fet02018';
-//CREDS['password'] = 'C@f3t02010';
+CREDS['password'] = 'Password!!';
+//CREDS['password'] = 'Password!!';
 
 module.exports = {
   connect: async function () {
