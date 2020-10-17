@@ -6,7 +6,7 @@
   "dependencies": {
     "fast-csv": "^2.4.1",
     "nodemon": "^1.18.4",
-    "puppeteer": "^1.8.0"
+    "puppeteer": "^1.13.0"
   },
   "devDependencies": {},
   "scripts": {
