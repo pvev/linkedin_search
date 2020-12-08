@@ -4,7 +4,7 @@
   "description": "search linkedin contacts form a csv file using screen scraping",
   "main": "index.js",
   "dependencies": {
-    "fast-csv": "^2.4.1",
+    "fast-csv": "^4.3.6",
     "nodemon": "^1.18.4",
     "puppeteer": "^1.8.0"
   },
